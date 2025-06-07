@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Container, 
-  Grid, 
+  Grid,
   Box, 
   Typography, 
   CssBaseline, 
@@ -108,8 +108,8 @@ const App: React.FC = () => {
   // Game state
   const [gameState, setGameState] = useState<GameState>(chessService.getGameState());
   
-  // Game mode - default to simple as requested
-  const [gameMode, setGameMode] = useState<GameMode>('simple');
+  // Game mode - default to AI vs AI simple as requested
+  const [gameMode, setGameMode] = useState<GameMode>('ai-vs-ai-simple');
   
   // Available models
   const [availableModels, setAvailableModels] = useState<string[]>([]);
@@ -210,14 +210,14 @@ const App: React.FC = () => {
 
   // Check if it's currently a human player's turn
   const isHumanTurn = useCallback(() => {
-    if (gameMode !== 'human-vs-ai') return false;
+    if (!gameMode.startsWith('human-vs-ai')) return false;
     const currentPlayer = getCurrentPlayer();
     return currentPlayer.type === 'human';
   }, [gameMode, getCurrentPlayer]);
 
   // Get the human player's color in human-vs-ai mode
   const getHumanColor = useCallback((): 'white' | 'black' | null => {
-    if (gameMode !== 'human-vs-ai') return null;
+    if (!gameMode.startsWith('human-vs-ai')) return null;
     return whitePlayer.type === 'human' ? 'white' : 'black';
   }, [gameMode, whitePlayer.type]);
 
@@ -261,7 +261,7 @@ const App: React.FC = () => {
       try {
         let moveResult;
         
-        if (gameMode === 'simple') {
+        if (gameMode === 'ai-vs-ai-simple' || gameMode === 'human-vs-ai-simple') {
           moveResult = await simpleAiService.fetchNextMove(
             currentPlayer.model as AIModel,
             gameState,
@@ -313,7 +313,7 @@ const App: React.FC = () => {
 
   const whiteMemory = getMemoryInfo('white');
   const blackMemory = getMemoryInfo('black');
-  const showStrategyColumns = gameMode === 'complex' && isGameRunning;
+  const showStrategyColumns = gameMode === 'ai-vs-ai-complex' && isGameRunning;
 
   // Cleanup Stockfish service on unmount
   useEffect(() => {
@@ -441,7 +441,7 @@ const App: React.FC = () => {
               </Box>
               
               {/* Status indicators */}
-              {(isAnalyzing || isStrategizing) && gameMode === 'complex' && (
+              {(isAnalyzing || isStrategizing) && gameMode === 'ai-vs-ai-complex' && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <CircularProgress size={16} />
                   <Typography variant="body2">
@@ -450,7 +450,7 @@ const App: React.FC = () => {
                 </Box>
               )}
               
-              {isThinking && (gameMode === 'simple' || gameMode === 'human-vs-ai') && (
+              {isThinking && (gameMode === 'ai-vs-ai-simple' || gameMode.startsWith('human-vs-ai')) && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <CircularProgress size={16} />
                   <Typography variant="body2">
@@ -481,7 +481,7 @@ const App: React.FC = () => {
               )}
               
               {/* Position analysis - only in complex mode */}
-              {visionAnalysis && gameMode === 'complex' && (
+              {visionAnalysis && gameMode === 'ai-vs-ai-complex' && (
                 <Accordion>
                   <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                     <Typography variant="subtitle2">Position Analysis</Typography>

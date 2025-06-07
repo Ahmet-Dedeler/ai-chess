@@ -16,7 +16,11 @@ class StockfishService {
   private initializationPromise: Promise<void> | null = null;
 
   constructor() {
-    this.initializeWorker();
+    // Initialize worker async, don't block constructor
+    this.initializeWorker().catch(error => {
+      console.warn('⚠️ Stockfish failed to initialize, running in fallback mode:', error);
+      this.isReady = false;
+    });
   }
 
   private async initializeWorker() {
@@ -32,13 +36,26 @@ class StockfishService {
         const stockfishPath = `${window.location.origin}/stockfish/stockfish-nnue-16-single.js`;
         console.log('📍 Worker path:', stockfishPath);
         
-        this.worker = new Worker(stockfishPath) as StockfishWorker;
+        // Try to load the worker with better error handling
+        try {
+          this.worker = new Worker(stockfishPath) as StockfishWorker;
+        } catch (error) {
+          console.error('❌ Failed to create Stockfish worker:', error);
+          console.log('🔧 Using fallback mode without Stockfish');
+          this.isReady = false;
+          resolve(); // Resolve to allow fallback
+          return;
+        }
         
         // Set up timeout for initialization
         const initTimeout = setTimeout(() => {
           console.error('❌ Stockfish initialization timeout');
-          reject(new Error('Stockfish initialization timeout'));
-        }, 10000); // 10 second timeout
+          console.log('🔧 Attempting fallback initialization...');
+          // Don't reject immediately, try fallback
+          this.isReady = false;
+          clearTimeout(initTimeout);
+          resolve(); // Resolve anyway to allow fallback
+        }, 20000); // 20 second timeout
         
         this.worker.onmessage = (event) => {
           console.log('📨 Stockfish message:', event.data);

@@ -1,8 +1,8 @@
 // AI Models supported by the application
 export type AIModel = string;
 
-// Game modes
-export type GameMode = 'complex' | 'simple' | 'human-vs-ai';
+// Game modes - hierarchical structure
+export type GameMode = 'ai-vs-ai-simple' | 'ai-vs-ai-complex' | 'human-vs-ai-simple' | 'human-vs-ai-complex';
 
 // Player types
 export type PlayerType = 'ai' | 'human';
