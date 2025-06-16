@@ -1,27 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Box, 
   Paper, 
   Typography, 
   FormControl, 
-  InputLabel, 
   Select, 
   MenuItem, 
   Button, 
-  ButtonGroup,
   Chip,
   Stack,
-  SelectChangeEvent,
   CircularProgress,
   Divider,
   Radio,
   RadioGroup,
   FormControlLabel,
-  FormLabel,
-  Card,
-  CardContent,
-  IconButton,
-  Tooltip
+  ToggleButton,
+  ToggleButtonGroup
 } from '@mui/material';
 import {
   PlayArrow,
@@ -30,7 +24,6 @@ import {
   Person,
   Psychology,
   Speed,
-  Settings,
   Computer,
   EmojiObjects
 } from '@mui/icons-material';
@@ -73,10 +66,31 @@ const ModernControlPanel: React.FC<ModernControlPanelProps> = ({
   isLoadingModels
 }) => {
 
-  const handleGameModeChange = (newMode: GameMode) => {
+  // Extract main category and complexity from game mode
+  const getMainCategory = (mode: GameMode): 'ai-vs-ai' | 'human-vs-ai' => {
+    return mode.startsWith('ai-vs-ai') ? 'ai-vs-ai' : 'human-vs-ai';
+  };
+
+  const getComplexity = (mode: GameMode): 'simple' | 'complex' => {
+    return mode.endsWith('simple') ? 'simple' : 'complex';
+  };
+
+  const [mainCategory, setMainCategory] = useState<'ai-vs-ai' | 'human-vs-ai'>(getMainCategory(gameMode));
+  const [complexity, setComplexity] = useState<'simple' | 'complex'>(getComplexity(gameMode));
+
+  // Sync internal state with gameMode prop changes
+  React.useEffect(() => {
+    setMainCategory(getMainCategory(gameMode));
+    setComplexity(getComplexity(gameMode));
+  }, [gameMode]);
+
+  const handleMainCategoryChange = (newCategory: 'ai-vs-ai' | 'human-vs-ai') => {
+    setMainCategory(newCategory);
+    const newMode: GameMode = `${newCategory}-${complexity}` as GameMode;
     onGameModeChange(newMode);
     
-    if (newMode === 'human-vs-ai') {
+    // Set appropriate player configurations
+    if (newCategory === 'human-vs-ai') {
       onWhitePlayerChange({ color: 'white', type: 'human' });
       onBlackPlayerChange({ 
         color: 'black', 
@@ -95,6 +109,12 @@ const ModernControlPanel: React.FC<ModernControlPanelProps> = ({
         model: POPULAR_MODELS[1] || availableModels[1] || availableModels[0] || '' 
       });
     }
+  };
+
+  const handleComplexityChange = (newComplexity: 'simple' | 'complex') => {
+    setComplexity(newComplexity);
+    const newMode: GameMode = `${mainCategory}-${newComplexity}` as GameMode;
+    onGameModeChange(newMode);
   };
 
   const handleHumanColorChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -142,7 +162,7 @@ const ModernControlPanel: React.FC<ModernControlPanelProps> = ({
     if (isGameRunning) return false;
     
     // In human vs AI mode, only the AI player needs a model
-    if (gameMode === 'human-vs-ai') {
+    if (mainCategory === 'human-vs-ai') {
       if (whitePlayer.type === 'ai') {
         return !!whitePlayer.model;
       } else {
@@ -166,64 +186,64 @@ const ModernControlPanel: React.FC<ModernControlPanelProps> = ({
     >
       <Stack direction="row" spacing={3} alignItems="center" flexWrap="wrap">
         
-        {/* Game Mode Selection */}
+        {/* Main Game Mode Selection */}
         <Box>
           <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: '#495057' }}>
-            Game Mode
+            Game Type
           </Typography>
-          <ButtonGroup variant="outlined" size="small">
-            <Tooltip title="Simple AI vs AI - Quick gameplay">
-              <Button
-                variant={gameMode === 'simple' ? 'contained' : 'outlined'}
-                onClick={() => handleGameModeChange('simple')}
-                disabled={isGameRunning}
-                startIcon={<Speed />}
-                sx={{ 
-                  minWidth: 100,
-                  textTransform: 'none',
-                  fontWeight: gameMode === 'simple' ? 600 : 400
-                }}
-              >
-                Simple
-              </Button>
-            </Tooltip>
-            <Tooltip title="Human vs AI - Play against computer">
-              <Button
-                variant={gameMode === 'human-vs-ai' ? 'contained' : 'outlined'}
-                onClick={() => handleGameModeChange('human-vs-ai')}
-                disabled={isGameRunning}
-                startIcon={<Person />}
-                sx={{ 
-                  minWidth: 100,
-                  textTransform: 'none',
-                  fontWeight: gameMode === 'human-vs-ai' ? 600 : 400
-                }}
-              >
-                vs AI
-              </Button>
-            </Tooltip>
-            <Tooltip title="Complex AI vs AI - Full analysis & strategy">
-              <Button
-                variant={gameMode === 'complex' ? 'contained' : 'outlined'}
-                onClick={() => handleGameModeChange('complex')}
-                disabled={isGameRunning}
-                startIcon={<Psychology />}
-                sx={{ 
-                  minWidth: 100,
-                  textTransform: 'none',
-                  fontWeight: gameMode === 'complex' ? 600 : 400
-                }}
-              >
-                Complex
-              </Button>
-            </Tooltip>
-          </ButtonGroup>
+          <ToggleButtonGroup
+            value={mainCategory}
+            exclusive
+            onChange={(event, newCategory) => {
+              if (newCategory !== null) {
+                handleMainCategoryChange(newCategory);
+              }
+            }}
+            size="small"
+            disabled={isGameRunning}
+          >
+            <ToggleButton value="ai-vs-ai" sx={{ textTransform: 'none', minWidth: 100 }}>
+              <Computer sx={{ mr: 1 }} />
+              AI vs AI
+            </ToggleButton>
+            <ToggleButton value="human-vs-ai" sx={{ textTransform: 'none', minWidth: 100 }}>
+              <Person sx={{ mr: 1 }} />
+              Human vs AI
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+
+        {/* Complexity Selection */}
+        <Box>
+          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: '#495057' }}>
+            AI Complexity
+          </Typography>
+          <ToggleButtonGroup
+            value={complexity}
+            exclusive
+            onChange={(event, newComplexity) => {
+              if (newComplexity !== null) {
+                handleComplexityChange(newComplexity);
+              }
+            }}
+            size="small"
+            disabled={isGameRunning}
+          >
+            <ToggleButton value="simple" sx={{ textTransform: 'none', minWidth: 80 }}>
+              <Speed sx={{ mr: 1 }} />
+              Simple
+            </ToggleButton>
+            <ToggleButton value="complex" sx={{ textTransform: 'none', minWidth: 80 }}>
+              <Psychology sx={{ mr: 1 }} />
+              Complex
+            </ToggleButton>
+          </ToggleButtonGroup>
         </Box>
 
         <Divider orientation="vertical" flexItem />
 
         {/* Human vs AI Settings */}
-        {gameMode === 'human-vs-ai' && (
+        {mainCategory === 'human-vs-ai' && (
           <>
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: '#495057' }}>
@@ -305,7 +325,7 @@ const ModernControlPanel: React.FC<ModernControlPanelProps> = ({
         )}
 
         {/* AI vs AI Settings */}
-        {(gameMode === 'simple' || gameMode === 'complex') && (
+        {mainCategory === 'ai-vs-ai' && (
           <>
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: '#495057' }}>

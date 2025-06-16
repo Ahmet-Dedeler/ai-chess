@@ -1,3 +1,38 @@
+/**
+ * AI Service - Advanced Chess AI Integration
+ * 
+ * This service provides sophisticated AI chess playing capabilities by integrating
+ * with OpenAI's language models. It handles:
+ * 
+ * - Complex chess position analysis and move generation
+ * - Strategic memory and long-term planning
+ * - Integration with vision analysis for position understanding
+ * - Support for multiple AI models including o-series models
+ * - Fallback handling for robust gameplay
+ * 
+ * The service creates rich, contextual prompts that include:
+ * - Current board position and game state
+ * - Legal moves and chess guidelines
+ * - Player's strategic memory and goals
+ * - Position analysis from vision service
+ * - Move evaluation and reasoning
+ */Service - Advanced Chess AI Integration
+ * 
+ * Bu servis, OpenAI ve diğer büyük dil modelleriyle satranç oynayan gelişmiş bir AI sağlar.
+ * - Karmaşık pozisyon analizi ve hamle üretimi
+ * - Stratejik hafıza ve uzun vadeli planlama
+ * - Vision analizi ile pozisyon değerlendirmesi
+ * - Birden fazla AI modeli desteği
+ * - Güçlü hata ve fallback yönetimi
+ * 
+ * Servis, aşağıdaki bilgileri içeren zengin ve bağlamsal istemler oluşturur:
+ * - Mevcut tahta pozisyonu ve oyun durumu
+ * - Legal hamleler ve satranç rehberleri
+ * - Oyuncunun stratejik hafızası ve hedefleri
+ * - Vision servisinden pozisyon analizi
+ * - Hamle değerlendirmesi ve mantığı
+ */
+
 import axios from 'axios';
 import OpenAI from 'openai';
 import { AIModel, GameState, AIFunctionCallResponse, Move } from '../types';
@@ -5,13 +40,14 @@ import { chessService } from './chessService';
 import { memoryService } from './memoryService';
 import { strategyService } from './strategyService';
 
-// Initialize OpenAI with API key from environment variable
+// Initialize OpenAI client with API key from environment variables
+// Note: In production, this should be handled server-side for security
 const openai = new OpenAI({
   apiKey: process.env.REACT_APP_OPENAI_API_KEY,
   dangerouslyAllowBrowser: true // Only for demo, in production this should be server-side
 });
 
-// Define the API endpoints for different AI models
+// Define API endpoints for different AI model providers (future extensibility)
 const API_ENDPOINTS = {
   'gpt-3.5-turbo': '/api/openai',
   'gpt-4': '/api/openai',
@@ -19,37 +55,42 @@ const API_ENDPOINTS = {
   'claude-3-sonnet': '/api/anthropic'
 };
 
-// Fetch available models from OpenAI API
+/**
+ * fetchAvailableModels
+ * Fetches available AI models from OpenAI API and filters them for chess usage.
+ * Returns only models suitable for chess playing.
+ * @returns Promise<string[]> - Array of suitable model names
+ */
 const fetchAvailableModels = async (): Promise<string[]> => {
   try {
     const response = await openai.models.list();
     
-    // Define patterns for models that are NOT chat completion models
+    // Define patterns for models that are NOT suitable for chess playing
     const excludePatterns = [
-      /embedding/i,           // Embedding models (text-embedding-*)
-      /whisper/i,            // Audio transcription
+      /embedding/i,           // Text embedding models (text-embedding-*)
+      /whisper/i,            // Audio transcription models
       /tts-/i,               // Text-to-speech models
       /dall-e/i,             // Image generation models
       /moderation/i,         // Content moderation models
       /babbage|davinci|curie|ada/i,  // Legacy base models
-      /^text-/i              // Legacy text models
+      /^text-/i              // Legacy text completion models
     ];
     
-    // Filter out models that are clearly not for chat completions
+    // Filter and sort available chat completion models
     const chatModels = response.data
       .filter(model => {
-        // Exclude models matching the patterns above
+        // Exclude models that don't support chat completions
         return !excludePatterns.some(pattern => pattern.test(model.id));
       })
       .map(model => model.id)
-      .sort(); // Sort alphabetically for better UX
+      .sort(); // Alphabetical sorting for better user experience
     
     console.log(`✅ Found ${chatModels.length} potential chat completion models`);
     
     return chatModels;
   } catch (error) {
     console.error('Error fetching available models:', error);
-    // Return a comprehensive fallback set including o-series models
+    // Return comprehensive fallback set including latest models
     return [
       'gpt-4o',
       'gpt-4o-mini', 
@@ -66,7 +107,18 @@ const fetchAvailableModels = async (): Promise<string[]> => {
   }
 };
 
-// Create a rich system message with chess context
+/**
+ * createSystemMessage
+ * Creates a comprehensive system message providing full context and chess knowledge to the AI.
+ * Includes game state, legal moves, memory, vision analysis, and chess guidelines.
+ * 
+ * @param gameState - Current state of the chess game
+ * @param playerColor - Color the AI is playing ('white' or 'black')
+ * @param legalMoves - Array of all legal moves in current position
+ * @param visionAnalysis - Optional position analysis from vision service
+ * @param playerMemory - Formatted memory containing strategy and goals
+ * @returns string - Complete system message for the AI
+ */
 const createSystemMessage = (
   gameState: GameState, 
   playerColor: 'white' | 'black', 
@@ -74,28 +126,29 @@ const createSystemMessage = (
   visionAnalysis: string | null,
   playerMemory: string
 ) => {
-  // Convert legal moves to a readable string format
+  // Format legal moves in human-readable format for the AI
   const legalMovesFormatted = legalMoves.map(move => 
     `${move.from}->${move.to}${move.promotion ? `(promote to ${move.promotion})` : ''}`
   ).join(', ');
   
-  // Get last move for context
+  // Provide context about the opponent's last move
   const lastMove = gameState.history.length > 0 ? gameState.history[gameState.history.length - 1] : null;
   const lastMoveText = lastMove ? 
     `Your opponent's last move was ${lastMove.san} (${lastMove.from} to ${lastMove.to}).` : 
     'You are making the first move of the game.';
   
-  // Create human-readable piece positions with coordinates
+  // Create detailed board representation with piece positions and coordinates
   const board = chessService.getBoardPosition();
   let piecePositions = '';
   
+  // Convert board array to human-readable format
   for (let i = 0; i < board.length; i++) {
-    const rank = 8 - i;
+    const rank = 8 - i; // Chess ranks are numbered 8-1 from top to bottom
     let rankStr = `Rank ${rank}: `;
     
     for (let j = 0; j < board[i].length; j++) {
       const square = board[i][j];
-      const file = String.fromCharCode(97 + j); // 'a' through 'h'
+      const file = String.fromCharCode(97 + j); // Convert to letters 'a'-'h'
       const squareNotation = `${file}${rank}`;
       
       if (square) {
@@ -108,11 +161,11 @@ const createSystemMessage = (
     piecePositions += rankStr + '\n';
   }
   
-  // Add vision analysis section if available
+  // Include grandmaster-level position analysis if available
   const visionAnalysisSection = visionAnalysis ? 
     `\n\nGRANDMASTER ANALYSIS OF THE POSITION:\n${visionAnalysis}\n\n` : '';
   
-  // Get move count and game phase
+  // Determine game phase and move count for contextual advice
   const moveCount = gameState.history.length;
   const moveNumber = Math.floor(moveCount / 2) + 1;
   let gamePhase = "opening";
@@ -122,7 +175,7 @@ const createSystemMessage = (
     gamePhase = "middlegame";
   }
   
-  // Create the system message with full context
+  // Construct comprehensive system message with chess knowledge and context
   return `You are playing ${playerColor} in a chess game. Your goal is to win by checkmate. 
 Your pieces are ${playerColor === 'white' ? 'white' : 'black'}.
 
@@ -165,33 +218,42 @@ Choose your final move based on your analysis, generally preferring the highest-
 Make your move using the make_chess_move function with from and to coordinates.`;
 };
 
-// Update player's strategic memory before making a move
+/**
+ * updatePlayerStrategy
+ * Updates the AI player's strategic memory and goals before making a move.
+ * This includes opening selection, short/long-term goals, and reflections.
+ * 
+ * @param gameState - Current game state
+ * @param playerColor - Color of the player to update strategy for
+ */
 const updatePlayerStrategy = async (
   gameState: GameState,
   playerColor: 'white' | 'black'
 ): Promise<void> => {
   try {
-    // Get current player move number (half-moves)
+    // Calculate move counts for strategy timing
     const moveCount = gameState.history.length;
     const playerMoveCount = Math.ceil(moveCount / 2);
     
-    // Plan the strategy (opening, short and long-term goals)
+    // Generate strategic plan using the strategy service
     const strategy = await strategyService.planStrategy(gameState, playerColor);
     
-    // Update memory with the new strategy
+    // Update opening choice (primarily in early game)
     if (strategy.opening && (!memoryService.getMemory(playerColor).opening || moveCount < 10)) {
       memoryService.setOpening(playerColor, strategy.opening);
     }
     
+    // Update short-term tactical goals
     if (strategy.shortTermGoals.length > 0) {
       memoryService.updateShortTermGoals(playerColor, strategy.shortTermGoals, playerMoveCount);
     }
     
+    // Update long-term strategic objectives
     if (strategy.longTermGoals.length > 0) {
       memoryService.updateLongTermGoals(playerColor, strategy.longTermGoals, playerMoveCount);
     }
     
-    // Add reflection
+    // Add reflective thoughts about the position
     if (strategy.reflection) {
       memoryService.addReflection(playerColor, strategy.reflection);
     }
@@ -200,7 +262,18 @@ const updatePlayerStrategy = async (
   }
 };
 
-// Get the next move from the AI
+/**
+ * fetchNextMove
+ * Fetches the next move from AI for the current position.
+ * Implements different paths for o-series and GPT-series models.
+ * Provides fallback with random legal move on errors or invalid moves.
+ * 
+ * @param model - AI model to use for move generation
+ * @param gameState - Current state of the chess game
+ * @param playerColor - Color the AI is playing
+ * @param visionAnalysis - Optional position analysis from vision service
+ * @returns Promise with the chosen move and analysis
+ */
 const fetchNextMove = async (
   model: AIModel | string,
   gameState: GameState,
@@ -208,16 +281,16 @@ const fetchNextMove = async (
   visionAnalysis: string | null = null
 ): Promise<{ move: AIFunctionCallResponse, moveAnalysis: string }> => {
   try {
-    // Update the player's strategy and memory
+    // First, update the player's strategic memory and goals
     await updatePlayerStrategy(gameState, playerColor);
     
-    // Get all legal moves for the current position
+    // Get all legal moves available in the current position
     const legalMoves = chessService.getAllLegalMoves();
     
-    // Get the player's memory formatted for the prompt
+    // Format the player's memory for inclusion in the prompt
     const playerMemory = memoryService.formatMemoryForPrompt(playerColor);
     
-    // Create the system message with all context
+    // Create comprehensive system message with full context
     const systemMessage = createSystemMessage(
       gameState, 
       playerColor, 
@@ -226,10 +299,10 @@ const fetchNextMove = async (
       playerMemory
     );
     
-    // Check if this is an o-series model (o1, o3, o4, etc.)
+    // Check if this is an o-series model (o1, o3, o4, etc.) which have different capabilities
     const isOSeriesModel = /^o\d/.test(model as string);
     
-    // Prepare the base request parameters
+    // Prepare base parameters for the OpenAI API call
     const baseParams = {
       model: model as string,
       messages: [
@@ -243,8 +316,8 @@ const fetchNextMove = async (
     let response;
     
     if (isOSeriesModel) {
-      // O-series models have limitations: no function calling, use max_completion_tokens
-      // They need a different approach - include move instruction in the system message
+      // O-series models don't support function calling, so we need a different approach
+      // Include move format instructions directly in the system message
       const oSeriesSystemMessage = systemMessage + `
 
 IMPORTANT: You must respond with your move in this exact JSON format at the end of your response:
@@ -252,6 +325,7 @@ IMPORTANT: You must respond with your move in this exact JSON format at the end 
 
 Replace the from/to squares with your chosen move. Include promotion only if it's a pawn promotion (use "q", "r", "b", or "n").`;
 
+      // Use max_completion_tokens instead of max_tokens for o-series models
       response = await openai.chat.completions.create({
         ...baseParams,
         messages: [
@@ -408,7 +482,7 @@ Replace the from/to squares with your chosen move. Include promotion only if it'
   }
 };
 
-// Get the next move
+// getNextMove: Wraps fetchNextMove function and provides error handling.
 const getNextMove = async (
   model: AIModel | string,
   gameState: GameState,
@@ -424,7 +498,7 @@ const getNextMove = async (
   }
 };
 
-// Reset memory and strategy when the game is reset
+// resetAI: Clears AI memory when the game is reset.
 const resetAI = () => {
   memoryService.resetMemory();
 };
@@ -433,4 +507,4 @@ export const aiService = {
   getNextMove,
   fetchAvailableModels,
   resetAI
-}; 
+};
